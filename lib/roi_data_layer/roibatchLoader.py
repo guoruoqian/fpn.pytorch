@@ -72,6 +72,12 @@ class roibatchLoader(data.Dataset):
     if self.training:
         np.random.shuffle(blobs['gt_boxes'])
         gt_boxes = torch.from_numpy(blobs['gt_boxes'])
+        # if self.batch_size == 1:
+        #     data = data.permute(0, 3, 1, 2).contiguous().view(3, data_height, data_width)
+        #     im_info = im_info.view(3)
+        #     num_boxes = gt_boxes.size(0)
+        #
+        #     return data, im_info, gt_boxes, num_boxes, blobs['img_id']
 
         ########################################################
         # padding the input image to fixed size for each group #
@@ -113,8 +119,8 @@ class roibatchLoader(data.Dataset):
                 data = data[:, y_s:(y_s + trim_size), :, :]
 
                 # shift y coordiante of gt_boxes
-                gt_boxes[:, 1] = gt_boxes[:, 1] - y_s
-                gt_boxes[:, 3] = gt_boxes[:, 3] - y_s
+                gt_boxes[:, 1] = gt_boxes[:, 1] - float(y_s)
+                gt_boxes[:, 3] = gt_boxes[:, 3] - float(y_s)
 
                 # update gt bounding box according the trip
                 gt_boxes[:, 1].clamp_(0, trim_size - 1)
@@ -147,8 +153,8 @@ class roibatchLoader(data.Dataset):
                 data = data[:, :, x_s:(x_s + trim_size), :]
 
                 # shift x coordiante of gt_boxes
-                gt_boxes[:, 0] = gt_boxes[:, 0] - x_s
-                gt_boxes[:, 2] = gt_boxes[:, 2] - x_s
+                gt_boxes[:, 0] = gt_boxes[:, 0] - float(x_s)
+                gt_boxes[:, 2] = gt_boxes[:, 2] - float(x_s)
                 # update gt bounding box according the trip
                 gt_boxes[:, 0].clamp_(0, trim_size - 1)
                 gt_boxes[:, 2].clamp_(0, trim_size - 1)

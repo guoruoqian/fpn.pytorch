@@ -14,8 +14,13 @@ import numpy as np
 import numpy.random as npr
 
 from model.utils.config import cfg
-from generate_anchors import generate_anchors, generate_anchors_all_pyramids
-from bbox_transform import clip_boxes, bbox_overlaps_batch, bbox_transform_batch
+from .generate_anchors import generate_anchors, generate_anchors_all_pyramids
+from .bbox_transform import clip_boxes, bbox_overlaps_batch, bbox_transform_batch
+
+try:
+    long  # Python 2
+except NameError:
+    long = int  # Python 3
 
 import pdb
 
@@ -57,10 +62,11 @@ class _AnchorTargetLayer_FPN(nn.Module):
 
         batch_size = gt_boxes.size(0)
 
-        anchors = torch.from_numpy(generate_anchors_all_pyramids(self._fpn_scales, self._anchor_ratios, 
-                feat_shapes, self._fpn_feature_strides, self._fpn_anchor_stride)).type_as(scores)    
+        anchors = torch.from_numpy(generate_anchors_all_pyramids(self._fpn_scales, self._anchor_ratios,
+                                                                 feat_shapes, self._fpn_feature_strides,
+                                                                 self._fpn_anchor_stride)).type_as(scores)
         total_anchors = anchors.size(0)
-        
+
         keep = ((anchors[:, 0] >= -self._allowed_border) &
                 (anchors[:, 1] >= -self._allowed_border) &
                 (anchors[:, 2] < long(im_info[0][1]) + self._allowed_border) &
@@ -84,11 +90,11 @@ class _AnchorTargetLayer_FPN(nn.Module):
         if not cfg.TRAIN.RPN_CLOBBER_POSITIVES:
             labels[max_overlaps < cfg.TRAIN.RPN_NEGATIVE_OVERLAP] = 0
 
-        gt_max_overlaps[gt_max_overlaps==0] = 1e-5
-        keep = torch.sum(overlaps.eq(gt_max_overlaps.view(batch_size,1,-1).expand_as(overlaps)), 2)
+        gt_max_overlaps[gt_max_overlaps == 0] = 1e-5
+        keep = torch.sum(overlaps.eq(gt_max_overlaps.view(batch_size, 1, -1).expand_as(overlaps)), 2)
 
         if torch.sum(keep) > 0:
-            labels[keep>0] = 1
+            labels[keep > 0] = 1
 
         # fg label: above threshold IOU
         labels[max_overlaps >= cfg.TRAIN.RPN_POSITIVE_OVERLAP] = 1
@@ -108,9 +114,9 @@ class _AnchorTargetLayer_FPN(nn.Module):
                 # torch.randperm seems has a bug on multi-gpu setting that cause the segfault. 
                 # See https://github.com/pytorch/pytorch/issues/1868 for more details.
                 # use numpy instead.                
-                #rand_num = torch.randperm(fg_inds.size(0)).type_as(gt_boxes).long()
+                # rand_num = torch.randperm(fg_inds.size(0)).type_as(gt_boxes).long()
                 rand_num = torch.from_numpy(np.random.permutation(fg_inds.size(0))).type_as(gt_boxes).long()
-                disable_inds = fg_inds[rand_num[:fg_inds.size(0)-num_fg]]
+                disable_inds = fg_inds[rand_num[:fg_inds.size(0) - num_fg]]
                 labels[i][disable_inds] = -1
 
             num_bg = cfg.TRAIN.RPN_BATCHSIZE - sum_fg[i]
@@ -118,19 +124,20 @@ class _AnchorTargetLayer_FPN(nn.Module):
             # subsample negative labels if we have too many
             if sum_bg[i] > num_bg:
                 bg_inds = torch.nonzero(labels[i] == 0).view(-1)
-                #rand_num = torch.randperm(bg_inds.size(0)).type_as(gt_boxes).long()
+                # rand_num = torch.randperm(bg_inds.size(0)).type_as(gt_boxes).long()
 
                 rand_num = torch.from_numpy(np.random.permutation(bg_inds.size(0))).type_as(gt_boxes).long()
-                disable_inds = bg_inds[rand_num[:bg_inds.size(0)-num_bg]]
+                disable_inds = bg_inds[rand_num[:bg_inds.size(0) - num_bg]]
                 labels[i][disable_inds] = -1
 
-        offset = torch.arange(0, batch_size)*gt_boxes.size(1)
+        offset = torch.arange(0, batch_size) * gt_boxes.size(1)
 
         argmax_overlaps = argmax_overlaps + offset.view(batch_size, 1).type_as(argmax_overlaps)
-        bbox_targets = _compute_targets_batch(anchors, gt_boxes.view(-1,5)[argmax_overlaps.view(-1), :].view(batch_size, -1, 5))
+        bbox_targets = _compute_targets_batch(anchors,
+                                              gt_boxes.view(-1, 5)[argmax_overlaps.view(-1), :].view(batch_size, -1, 5))
 
         # use a single value instead of 4 values for easy index.
-        bbox_inside_weights[labels==1] = cfg.TRAIN.RPN_BBOX_INSIDE_WEIGHTS[0]
+        bbox_inside_weights[labels == 1] = cfg.TRAIN.RPN_BBOX_INSIDE_WEIGHTS[0]
 
         if cfg.TRAIN.RPN_POSITIVE_WEIGHT < 0:
             num_examples = torch.sum(labels[i] >= 0)
@@ -159,13 +166,13 @@ class _AnchorTargetLayer_FPN(nn.Module):
         # anchors_count = bbox_inside_weights.size(1)
         # bbox_inside_weights = bbox_inside_weights.view(batch_size,anchors_count,1).expand(batch_size, anchors_count, 4)
         # bbox_inside_weights = bbox_inside_weights.contiguous().view(batch_size, height, width, 4*A)\
-                            # .permute(0,3,1,2).contiguous()
+        # .permute(0,3,1,2).contiguous()
 
         outputs.append(bbox_inside_weights)
 
         # bbox_outside_weights = bbox_outside_weights.view(batch_size,anchors_count,1).expand(batch_size, anchors_count, 4)
         # bbox_outside_weights = bbox_outside_weights.contiguous().view(batch_size, height, width, 4*A)\
-                            # .permute(0,3,1,2).contiguous()
+        # .permute(0,3,1,2).contiguous()
         outputs.append(bbox_outside_weights)
 
         return outputs
@@ -178,6 +185,7 @@ class _AnchorTargetLayer_FPN(nn.Module):
         """Reshaping happens during the call to forward."""
         pass
 
+
 def _unmap(data, count, inds, batch_size, fill=0):
     """ Unmap a subset of item (data) back to the original set of items (of
     size count) """
@@ -187,7 +195,7 @@ def _unmap(data, count, inds, batch_size, fill=0):
         ret[:, inds] = data
     else:
         ret = torch.Tensor(batch_size, count, data.size(2)).fill_(fill).type_as(data)
-        ret[:, inds,:] = data
+        ret[:, inds, :] = data
     return ret
 
 

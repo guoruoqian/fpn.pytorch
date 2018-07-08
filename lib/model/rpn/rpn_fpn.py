@@ -4,8 +4,8 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 
 from model.utils.config import cfg
-from proposal_layer_fpn import _ProposalLayer_FPN
-from anchor_target_layer_fpn import _AnchorTargetLayer_FPN
+from .proposal_layer_fpn import _ProposalLayer_FPN
+from .anchor_target_layer_fpn import _AnchorTargetLayer_FPN
 from model.utils.net_utils import _smooth_l1_loss
 
 import numpy as np
@@ -28,12 +28,12 @@ class _RPN_FPN(nn.Module):
 
         # define bg/fg classifcation score layer
         # self.nc_score_out = len(self.anchor_scales) * len(self.anchor_ratios) * 2 # 2(bg/fg) * 9 (anchors)
-        self.nc_score_out = 1 * len(self.anchor_ratios) * 2 # 2(bg/fg) * 3 (anchor ratios) * 1 (anchor scale)
+        self.nc_score_out = 1 * len(self.anchor_ratios) * 2  # 2(bg/fg) * 3 (anchor ratios) * 1 (anchor scale)
         self.RPN_cls_score = nn.Conv2d(512, self.nc_score_out, 1, 1, 0)
 
         # define anchor box offset prediction layer
         # self.nc_bbox_out = len(self.anchor_scales) * len(self.anchor_ratios) * 4 # 4(coords) * 9 (anchors)
-        self.nc_bbox_out = 1 * len(self.anchor_ratios) * 4 # 4(coords) * 3 (anchors) * 1 (anchor scale)
+        self.nc_bbox_out = 1 * len(self.anchor_ratios) * 4  # 4(coords) * 3 (anchors) * 1 (anchor scale)
         self.RPN_bbox_pred = nn.Conv2d(512, self.nc_bbox_out, 1, 1, 0)
 
         # define proposal layer
@@ -56,7 +56,7 @@ class _RPN_FPN(nn.Module):
         )
         return x
 
-    def forward(self, rpn_feature_maps, im_info, gt_boxes, num_boxes):        
+    def forward(self, rpn_feature_maps, im_info, gt_boxes, num_boxes):
 
 
         n_feat_maps = len(rpn_feature_maps)
@@ -69,7 +69,7 @@ class _RPN_FPN(nn.Module):
         for i in range(n_feat_maps):
             feat_map = rpn_feature_maps[i]
             batch_size = feat_map.size(0)
-            
+
             # return feature map after convrelu layer
             rpn_conv1 = F.relu(self.RPN_Conv(feat_map), inplace=True)
             # get rpn classification score
@@ -97,7 +97,7 @@ class _RPN_FPN(nn.Module):
         cfg_key = 'TRAIN' if self.training else 'TEST'
 
         rois = self.RPN_proposal((rpn_cls_prob_alls.data, rpn_bbox_pred_alls.data,
-                                 im_info, cfg_key, rpn_shapes))
+                                  im_info, cfg_key, rpn_shapes))
 
         self.rpn_loss_cls = 0
         self.rpn_loss_box = 0
@@ -111,7 +111,7 @@ class _RPN_FPN(nn.Module):
             # compute classification loss
             rpn_label = rpn_data[0].view(batch_size, -1)
             rpn_keep = Variable(rpn_label.view(-1).ne(-1).nonzero().view(-1))
-            rpn_cls_score = torch.index_select(rpn_cls_score_alls.view(-1,2), 0, rpn_keep)
+            rpn_cls_score = torch.index_select(rpn_cls_score_alls.view(-1, 2), 0, rpn_keep)
             rpn_label = torch.index_select(rpn_label.view(-1), 0, rpn_keep.data)
             rpn_label = Variable(rpn_label.long())
             self.rpn_loss_cls = F.cross_entropy(rpn_cls_score, rpn_label)
@@ -121,12 +121,12 @@ class _RPN_FPN(nn.Module):
 
             # compute bbox regression loss
             rpn_bbox_inside_weights = Variable(rpn_bbox_inside_weights.unsqueeze(2) \
-                    .expand(batch_size, rpn_bbox_inside_weights.size(1), 4))
+                                               .expand(batch_size, rpn_bbox_inside_weights.size(1), 4))
             rpn_bbox_outside_weights = Variable(rpn_bbox_outside_weights.unsqueeze(2) \
-                    .expand(batch_size, rpn_bbox_outside_weights.size(1), 4))
+                                                .expand(batch_size, rpn_bbox_outside_weights.size(1), 4))
             rpn_bbox_targets = Variable(rpn_bbox_targets)
-            
-            self.rpn_loss_box = _smooth_l1_loss(rpn_bbox_pred_alls, rpn_bbox_targets, rpn_bbox_inside_weights, 
-                            rpn_bbox_outside_weights, sigma=3)
+
+            self.rpn_loss_box = _smooth_l1_loss(rpn_bbox_pred_alls, rpn_bbox_targets, rpn_bbox_inside_weights,
+                                                rpn_bbox_outside_weights, sigma=3)
 
         return rois, self.rpn_loss_cls, self.rpn_loss_box

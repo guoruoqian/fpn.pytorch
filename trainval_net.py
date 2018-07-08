@@ -62,7 +62,7 @@ def parse_args():
 
   parser.add_argument('--save_dir', dest='save_dir',
                       help='directory to save models', default="/srv/share/jyang375/models",
-                      nargs=argparse.REMAINDER)
+                      )
   parser.add_argument('--num_workers', dest='num_workers',
                       help='number of worker to load data',
                       default=0, type=int)
@@ -147,9 +147,11 @@ class sampler(Sampler):
   def __len__(self):
     return num_data
 
-def _print(str, logger):
-  print(str)
-  logger.info(str)
+def _print(str, logger=None):
+    print(str)
+    if logger is None:
+        return
+    logger.info(str)
 
 if __name__ == '__main__':
 
@@ -163,16 +165,16 @@ if __name__ == '__main__':
     # Set the logger
     logger = Logger('./logs')
 
-  logging.basicConfig(filename="logs/"+args.net+"_"+args.dataset+"_"+str(args.session)+".log",
-        filemode='w', level=logging.DEBUG)
-  logging.info(str(datetime.now()))
+  # logging.basicConfig(filename="logs/"+args.net+"_"+args.dataset+"_"+str(args.session)+".log",
+  #       filemode='w', level=logging.DEBUG)
+  # logging.info(str(datetime.now()))
 
   if args.dataset == "pascal_voc":
       args.imdb_name = "voc_2007_trainval"
       args.imdbval_name = "voc_2007_test"
       args.set_cfgs = ['FPN_ANCHOR_SCALES', '[32, 64, 128, 256, 512]', 'FPN_FEAT_STRIDES', '[4, 8, 16, 32, 64]', 'MAX_NUM_GT_BOXES', '20']
   elif args.dataset == "pascal_voc_0712":
-      args.imdb_name = "voc_2007_trainval+voc_2012_trainval"
+      args.imdb_name = "voc_0712_trainval"
       args.imdbval_name = "voc_2007_test"
       args.set_cfgs = ['FPN_ANCHOR_SCALES', '[32, 64, 128, 256, 512]', 'FPN_FEAT_STRIDES', '[4, 8, 16, 32, 64]', 'MAX_NUM_GT_BOXES', '20']
   elif args.dataset == "coco":
@@ -199,7 +201,7 @@ if __name__ == '__main__':
 
   print('Using config:')
   pprint.pprint(cfg)
-  logging.info(cfg)
+  # logging.info(cfg)
   np.random.seed(cfg.RNG_SEED)
 
   #torch.backends.cudnn.benchmark = True
@@ -213,7 +215,7 @@ if __name__ == '__main__':
   imdb, roidb, ratio_list, ratio_index = combined_roidb(args.imdb_name)
   train_size = len(roidb)
 
-  _print('{:d} roidb entries'.format(len(roidb)), logging)
+  _print('{:d} roidb entries'.format(len(roidb)))
 
   output_dir = args.save_dir + "/" + args.net + "/" + args.dataset
   if not os.path.exists(output_dir):
@@ -286,7 +288,6 @@ if __name__ == '__main__':
   if args.resume:
     load_name = os.path.join(output_dir,
       'fpn_{}_{}_{}.pth'.format(args.checksession, args.checkepoch, args.checkpoint))
-    _print("loading checkpoint %s" % (load_name), logging)
     checkpoint = torch.load(load_name)
     args.session = checkpoint['session']
     args.start_epoch = checkpoint['epoch']
@@ -295,7 +296,6 @@ if __name__ == '__main__':
     lr = optimizer.param_groups[0]['lr']
     if 'pooling_mode' in checkpoint.keys():
       cfg.POOLING_MODE = checkpoint['pooling_mode']
-    _print("loaded checkpoint %s" % (load_name), logging)
 
   if args.mGPUs:
     FPN = nn.DataParallel(FPN)
@@ -351,18 +351,18 @@ if __name__ == '__main__':
           fg_cnt = torch.sum(roi_labels.data.ne(0))
           bg_cnt = roi_labels.data.numel() - fg_cnt
         else:
-          loss_rpn_cls = RCNN_rpn.rpn_loss_cls.data[0]
-          loss_rpn_box = RCNN_rpn.rpn_loss_box.data[0]
+          loss_rpn_cls = rpn_loss_cls.data[0]
+          loss_rpn_box = rpn_loss_box.data[0]
           loss_rcnn_cls = RCNN_loss_cls.data[0]
           loss_rcnn_box = RCNN_loss_bbox.data[0]
           fg_cnt = torch.sum(roi_labels.data.ne(0))
           bg_cnt = roi_labels.data.numel() - fg_cnt
 
-        _print("[session %d][epoch %2d][iter %4d] loss: %.4f, lr: %.2e" \
-                                % (args.session, epoch, step, loss_temp, lr), logging)
-        _print("\t\t\tfg/bg=(%d/%d), time cost: %f" % (fg_cnt, bg_cnt, end-start), logging)
+        _print("[session %d][epoch %2d][iter %4d/%4d] loss: %.4f, lr: %.2e" \
+               % (args.session, epoch, step, iters_per_epoch, loss_temp, lr), )
+        _print("\t\t\tfg/bg=(%d/%d), time cost: %f" % (fg_cnt, bg_cnt, end-start), )
         _print("\t\t\trpn_cls: %.4f, rpn_box: %.4f, rcnn_cls: %.4f, rcnn_box %.4f" \
-                      % (loss_rpn_cls, loss_rpn_box, loss_rcnn_cls, loss_rcnn_box), logging)
+                      % (loss_rpn_cls, loss_rpn_box, loss_rcnn_cls, loss_rcnn_box), )
         if args.use_tfboard:
           info = {
             'loss': loss_temp,
@@ -397,7 +397,7 @@ if __name__ == '__main__':
         'pooling_mode': cfg.POOLING_MODE,
         'class_agnostic': args.class_agnostic,
       }, save_name)
-    _print('save model: {}'.format(save_name), logging)
+    _print('save model: {}'.format(save_name))
 
     end = time.time()
     print(end - start)

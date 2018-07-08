@@ -14,9 +14,9 @@ import numpy as np
 import math
 import yaml
 from model.utils.config import cfg
-from generate_anchors import generate_anchors, generate_anchors_all_pyramids
-from bbox_transform import bbox_transform_inv, clip_boxes, clip_boxes_batch
-from model.nms.nms_wrapper import nms
+from .generate_anchors import generate_anchors, generate_anchors_all_pyramids
+from .bbox_transform import bbox_transform_inv, clip_boxes, clip_boxes_batch
+from lib.model.nms.nms_wrapper import nms
 
 import pdb
 
@@ -53,24 +53,24 @@ class _ProposalLayer_FPN(nn.Module):
         # take after_nms_topN proposals after NMS
         # return the top proposals (-> RoIs top, scores top)
 
-
         # the first set of _num_anchors channels are bg probs
         # the second set are the fg probs
         scores = input[0][:, :, 1]  # batch_size x num_rois x 1
-        bbox_deltas = input[1]      # batch_size x num_rois x 4
+        bbox_deltas = input[1]  # batch_size x num_rois x 4
         im_info = input[2]
         cfg_key = input[3]
-        feat_shapes = input[4]        
+        feat_shapes = input[4]
 
-        pre_nms_topN  = cfg[cfg_key].RPN_PRE_NMS_TOP_N
+        pre_nms_topN = cfg[cfg_key].RPN_PRE_NMS_TOP_N
         post_nms_topN = cfg[cfg_key].RPN_POST_NMS_TOP_N
-        nms_thresh    = cfg[cfg_key].RPN_NMS_THRESH
-        min_size      = cfg[cfg_key].RPN_MIN_SIZE
+        nms_thresh = cfg[cfg_key].RPN_NMS_THRESH
+        min_size = cfg[cfg_key].RPN_MIN_SIZE
 
         batch_size = bbox_deltas.size(0)
 
-        anchors = torch.from_numpy(generate_anchors_all_pyramids(self._fpn_scales, self._anchor_ratios, 
-                feat_shapes, self._fpn_feature_strides, self._fpn_anchor_stride)).type_as(scores)
+        anchors = torch.from_numpy(generate_anchors_all_pyramids(self._fpn_scales, self._anchor_ratios,
+                                                                 feat_shapes, self._fpn_feature_strides,
+                                                                 self._fpn_anchor_stride)).type_as(scores)
         num_anchors = anchors.size(0)
 
         anchors = anchors.view(1, num_anchors, 4).expand(batch_size, num_anchors, 4)
@@ -81,7 +81,7 @@ class _ProposalLayer_FPN(nn.Module):
         # 2. clip predicted boxes to image
         proposals = clip_boxes(proposals, im_info, batch_size)
         # keep_idx = self._filter_boxes(proposals, min_size).squeeze().long().nonzero().squeeze()
-                
+
         scores_keep = scores
         proposals_keep = proposals
 
@@ -102,7 +102,7 @@ class _ProposalLayer_FPN(nn.Module):
                 order_single = order_single[:pre_nms_topN]
 
             proposals_single = proposals_single[order_single, :]
-            scores_single = scores_single[order_single].view(-1,1)
+            scores_single = scores_single[order_single].view(-1, 1)
 
             # 6. apply nms (e.g. threshold = 0.7)
             # 7. take after_nms_topN (e.g. 300)
@@ -118,8 +118,8 @@ class _ProposalLayer_FPN(nn.Module):
 
             # padding 0 at the end.
             num_proposal = proposals_single.size(0)
-            output[i,:,0] = i
-            output[i,:num_proposal,1:] = proposals_single
+            output[i, :, 0] = i
+            output[i, :num_proposal, 1:] = proposals_single
 
         return output
 
